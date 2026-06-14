@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LotoEngine Web - Analise Preditiva Lotofacil</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee; padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 10px; font-size: 2em; background: linear-gradient(90deg, #00d4ff, #7b2cbf); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab-btn { background: #0f3460; border: none; color: #eee; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.3s; font-size: 14px; }
+        .tab-btn:hover { background: #1a4a7a; }
+        .tab-btn.active { background: #e94560; box-shadow: 0 0 10px rgba(233, 69, 96, 0.5); }
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .card { background: rgba(15, 52, 96, 0.8); backdrop-filter: blur(10px); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); }
+        .card h3 { margin-bottom: 15px; color: #00d4ff; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #ccc; font-size: 14px; }
+        input, textarea, select { width: 100%; padding: 10px; background: #0a1a2e; border: 1px solid #2a4a7a; border-radius: 8px; color: #eee; font-size: 14px; }
+        input:focus, textarea:focus { outline: none; border-color: #e94560; }
+        button { background: #e94560; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.3s; }
+        button:hover { background: #ff6b8a; transform: translateY(-2px); }
+        .numbers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 10px; margin-top: 15px; }
+        .number-card { background: linear-gradient(135deg, #e94560, #7b2cbf); padding: 12px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 18px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
+        .stat-card { background: #0a1a2e; padding: 15px; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: bold; color: #00d4ff; }
+        .stat-label { font-size: 12px; color: #888; margin-top: 5px; }
+        .slider { width: 100%; margin: 10px 0; }
+        .weight-value { color: #00d4ff; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #2a4a7a; }
+        th { color: #00d4ff; }
+        .canvas-container { max-width: 600px; margin: 0 auto; }
+        .flex-row { display: flex; gap: 15px; flex-wrap: wrap; }
+        .flex-row > * { flex: 1; }
+        @media (max-width: 768px) {
+            .numbers-grid { grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LotoEngine Web</h1>
+        <div class="subtitle">Algoritmo 9/6 + Analise Preditiva para Lotofacil</div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="gerar">Gerar Jogo</button>
+            <button class="tab-btn" data-tab="pesos">Painel de Pesos</button>
+            <button class="tab-btn" data-tab="auditoria">Auditoria</button>
+            <button class="tab-btn" data-tab="graficos">Graficos</button>
+            <button class="tab-btn" data-tab="historico">Historico</button>
+        </div>
+
+        <div class="tab-content active" id="tab-gerar">
+            <div class="card">
+                <h3>Ultimo Concurso</h3>
+                <div class="input-group">
+                    <label>Digite os 15 numeros do ultimo sorteio (separados por virgula):</label>
+                    <input type="text" id="ultimoConcurso" placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15" value="1,2,4,5,10,11,12,14,15,17,21,22,23,24,25">
+                </div>
+                <button onclick="gerarJogo()">Gerar Jogo Estrategico</button>
+                <div id="jogoGerado" style="margin-top: 20px;"></div>
+                <div id="analiseJogo" class="stats"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-pesos">
+            <div class="card">
+                <h3>Ajuste de Pesos dos Filtros</h3>
+                <div class="input-group">
+                    <label>Frequencia: <span id="pesoFreqLabel" class="weight-value">1.0</span></label>
+                    <input type="range" id="pesoFrequencia" class="slider" min="0" max="2" step="0.1" value="1.0">
+                </div>
+                <div class="input-group">
+                    <label>Atraso: <span id="pesoAtrasoLabel" class="weight-value">1.0</span></label>
+                    <input type="range" id="pesoAtraso" class="slider" min="0" max="2" step="0.1" value="1.0">
+                </div>
+                <div class="input-group">
+                    <label>Ciclo: <span id="pesoCicloLabel" class="weight-value">1.0</span></label>
+                    <input type="range" id="pesoCiclo" class="slider" min="0" max="2" step="0.1" value="1.0">
+                </div>
+                <button onclick="salvarPesos()">Salvar Pesos</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-auditoria">
+            <div class="card">
+                <h3>Auditar Jogo Gerado</h3>
+                <div class="flex-row">
+                    <div class="input-group">
+                        <label>Resultado Oficial (15 numeros, separados por virgula):</label>
+                        <input type="text" id="resultadoOficial" placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15">
+                    </div>
+                    <div class="input-group">
+                        <label>Selecione um jogo do historico:</label>
+                        <select id="jogoHistoricoSelect"></select>
+                    </div>
+                </div>
+                <button onclick="auditarJogo()">Auditar</button>
+                <div id="resultadoAuditoria" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-graficos">
+            <div class="card">
+                <h3>Frequencia dos Numeros (Historico)</h3>
+                <div class="canvas-container">
+                    <canvas id="frequenciaChart"></canvas>
+                </div>
+                <button onclick="atualizarGraficos()" style="margin-top: 15px;">Atualizar</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-historico">
+            <div class="card">
+                <h3>Historico de Jogos Gerados</h3>
+                <div style="overflow-x: auto;">
+                    <table id="historicoTable">
+                        <thead>
+                            <tr><th>ID</th><th>Data</th><th>Jogo</th><th>Soma</th><th>P/I</th><th>Primos</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <button onclick="limparHistorico()" style="margin-top: 15px; background: #dc3545;">Limpar Historico</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PRIMOS = [2, 3, 5, 7, 11, 13, 17, 19, 23];
+
+        function isPrimo(n) { return PRIMOS.includes(n); }
+
+        function validarNumeros(numeros) {
+            if (numeros.length !== 15) return false;
+            const unique = new Set(numeros);
+            if (unique.size !== 15) return false;
+            return numeros.every(function(n) { return n >= 1 && n <= 25; });
+        }
+
+        function analisarJogo(numeros) {
+            var soma = numeros.reduce(function(a,b) { return a + b; }, 0);
+            var pares = numeros.filter(function(n) { return n % 2 === 0; }).length;
+            var impares = 15 - pares;
+            var primos = numeros.filter(function(n) { return isPrimo(n); }).length;
+            return { soma: soma, pares: pares, impares: impares, primos: primos, okSoma: soma >= 180 && soma <= 220, okParImpar: pares === 8 || impares === 8, okPrimos: primos >= 5 && primos <= 6 };
+        }
+
+        function gerarJogoEstrategico(ultimoConcurso, pesos) {
+            if (!pesos) pesos = { freq: 1.0, atraso: 1.0, ciclo: 1.0 };
+            if (!validarNumeros(ultimoConcurso)) return null;
+
+            var manter = ultimoConcurso.slice(0, 9);
+            var manterSet = new Set(manter);
+
+            var candidatos = [];
+            for (var i = 1; i <= 25; i++) {
+                if (!manterSet.has(i)) {
+                    var score = (Math.random() * 100) * pesos.freq;
+                    candidatos.push({ num: i, score: score });
+                }
+            }
+            candidatos.sort(function(a,b) { return b.score - a.score; });
+            var novos = candidatos.slice(0, 6).map(function(c) { return c.num; });
+
+            var jogo = manter.concat(novos);
+            jogo.sort(function(a,b) { return a - b; });
+
+            var analise = analisarJogo(jogo);
+            var tentativas = 0;
+
+            while ((!analise.okSoma || !analise.okParImpar || !analise.okPrimos) && tentativas < 50) {
+                var idxAleatorio = Math.floor(Math.random() * 15);
+                var candidatoAlt = candidatos[6 + (tentativas % candidatos.length)];
+                if (!candidatoAlt) break;
+                jogo[idxAleatorio] = candidatoAlt.num;
+                jogo.sort(function(a,b) { return a - b; });
+                analise = analisarJogo(jogo);
+                tentativas++;
+            }
+
+            return { numeros: jogo, analise: analise };
+        }
+
+        function salvarJogo(jogo, analise) {
+            var historico = JSON.parse(localStorage.getItem('lotoengine_historico') || '[]');
+            var novoJogo = {
+                id: Date.now(),
+                data: new Date().toLocaleString(),
+                numeros: jogo,
+                soma: analise.soma,
+                pares: analise.pares,
+                impares: analise.impares,
+                primos: analise.primos
+            };
+            historico.unshift(novoJogo);
+            localStorage.setItem('lotoengine_historico', JSON.stringify(historico.slice(0, 50)));
+            atualizarHistoricoTable();
+            return novoJogo;
+        }
+
+        function carregarHistorico() { return JSON.parse(localStorage.getItem('lotoengine_historico') || '[]'); }
+
+        function atualizarHistoricoTable() {
+            var historico = carregarHistorico();
+            var tbody = document.querySelector('#historicoTable tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            historico.forEach(function(jogo) {
+                var row = tbody.insertRow();
+                row.insertCell(0).textContent = jogo.id;
+                row.insertCell(1).textContent = jogo.data;
+                row.insertCell(2).textContent = jogo.numeros.join(', ');
+                row.insertCell(3).textContent = jogo.soma;
+                row.insertCell(4).textContent = jogo.pares + '/' + jogo.impares;
+                row.insertCell(5).textContent = jogo.primos;
+            });
+            var select = document.getElementById('jogoHistoricoSelect');
+            if (select) {
+                select.innerHTML = '<option value="">-- Selecione um jogo --</option>';
+                historico.forEach(function(jogo) {
+                    var option = document.createElement('option');
+                    option.value = jogo.id;
+                    option.textContent = jogo.data + ' - ' + jogo.numeros.slice(0,5).join(',') + '...';
+                    select.appendChild(option);
+                });
+            }
+        }
+
+        function limparHistorico() {
+            if (confirm('Tem certeza que deseja limpar todo o historico?')) {
+                localStorage.removeItem('lotoengine_historico');
+                atualizarHistoricoTable();
+            }
+        }
+
+        function salvarPesos() {
+            var pesos = {
+                freq: parseFloat(document.getElementById('pesoFrequencia').value),
+                atraso: parseFloat(document.getElementById('pesoAtraso').value),
+                ciclo: parseFloat(document.getElementById('pesoCiclo').value)
+            };
+            localStorage.setItem('lotoengine_pesos', JSON.stringify(pesos));
+        }
+
+        function carregarPesos() {
+            var saved = localStorage.getItem('lotoengine_pesos');
+            if (saved) {
+                var pesos = JSON.parse(saved);
+                document.getElementById('pesoFrequencia').value = pesos.freq;
+                document.getElementById('pesoAtraso').value = pesos.atraso;
+                document.getElementById('pesoCiclo').value = pesos.ciclo;
+                atualizarLabelsPesos();
+            }
+        }
+
+        function atualizarLabelsPesos() {
+            document.getElementById('pesoFreqLabel').textContent = document.getElementById('pesoFrequencia').value;
+            document.getElementById('pesoAtrasoLabel').textContent = document.getElementById('pesoAtraso').value;
+            document.getElementById('pesoCicloLabel').textContent = document.getElementById('pesoCiclo').value;
+        }
+
+        function gerarJogo() {
+            var input = document.getElementById('ultimoConcurso').value;
+            var numeros = input.split(',').map(function(n) { return parseInt(n.trim()); }).filter(function(n) { return !isNaN(n); });
+
+            var pesos = {
+                freq: parseFloat(document.getElementById('pesoFrequencia').value),
+                atraso: parseFloat(document.getElementById('pesoAtraso').value),
+                ciclo: parseFloat(document.getElementById('pesoCiclo').value)
+            };
+
+            var resultado = gerarJogoEstrategico(numeros, pesos);
+            if (!resultado) { alert("Ultimo concurso invalido! Digite 15 numeros unicos entre 1 e 25."); return; }
+
+            var container = document.getElementById('jogoGerado');
+            var analiseDiv = document.getElementById('analiseJogo');
+
+            var html = '<h3>Jogo Gerado (15 numeros):</h3><div class="numbers-grid">';
+            resultado.numeros.forEach(function(num) {
+                html += '<div class="number-card">' + (num < 10 ? '0' : '') + num + '</div>';
+            });
+            html += '</div>';
+            container.innerHTML = html;
+
+            var a = resultado.analise;
+            analiseDiv.innerHTML = [
+                '<div class="stat-card"><div class="stat-value">' + a.soma + '</div><div class="stat-label">Soma (180-220)</div></div>',
+                '<div class="stat-card"><div class="stat-value">' + a.pares + '/' + a.impares + '</div><div class="stat-label">Pares/Impares</div></div>',
+                '<div class="stat-card"><div class="stat-value">' + a.primos + '</div><div class="stat-label">Numeros Primos</div></div>'
+            ].join('');
+
+            salvarJogo(resultado.numeros, a);
+        }
+
+        function auditarJogo() {
+            var resultadoInput = document.getElementById('resultadoOficial').value;
+            var selectJogo = document.getElementById('jogoHistoricoSelect');
+            if (!resultadoInput) { alert('Digite o resultado oficial!'); return; }
+
+            var resultado = resultadoInput.split(',').map(function(n) { return parseInt(n.trim()); }).filter(function(n) { return !isNaN(n); });
+            var jogoAuditar = null;
+            if (selectJogo.value) {
+                var historico = carregarHistorico();
+                jogoAuditar = historico.find(function(j) { return j.id == selectJogo.value; });
+            }
+            if (!jogoAuditar) { alert('Selecione um jogo do historico para auditar!'); return; }
+
+            var acertos = jogoAuditar.numeros.filter(function(num) { return resultado.indexOf(num) !== -1; }).length;
+            var premio = acertos >= 15 ? '15 PONTOS!' : acertos === 14 ? '14 PONTOS!' : acertos === 13 ? '13 PONTOS!' : acertos === 12 ? '12 PONTOS!' : acertos === 11 ? '11 PONTOS!' : 'Sem premiacao';
+
+            var auditoriaDiv = document.getElementById('resultadoAuditoria');
+            auditoriaDiv.innerHTML = [
+                '<div class="stat-card" style="background: linear-gradient(135deg, #e94560, #7b2cbf);">',
+                '<div class="stat-value">' + acertos + ' ACERTOS</div>',
+                '<div class="stat-label">' + premio + '</div></div>',
+                '<div class="stats" style="margin-top: 15px;">',
+                '<div class="stat-card"><div class="stat-label">Jogo auditado</div><div class="stat-value" style="font-size:16px">' + jogoAuditar.numeros.slice(0,5).join(',') + '...</div></div>',
+                '<div class="stat-card"><div class="stat-label">Resultado oficial</div><div class="stat-value" style="font-size:16px">' + resultado.slice(0,5).join(',') + '...</div></div></div>'
+            ].join('');
+        }
+
+        var frequenciaChart = null;
+
+        function atualizarGraficos() {
+            var historico = carregarHistorico();
+            var frequencia = {};
+            for (var i = 1; i <= 25; i++) frequencia[i] = 0;
+            historico.forEach(function(jogo) {
+                jogo.numeros.forEach(function(num) { frequencia[num]++; });
+            });
+
+            var labels = [];
+            for (var i = 1; i <= 25; i++) labels.push(i.toString());
+            var dados = labels.map(function(l) { return frequencia[parseInt(l)]; });
+
+            var ctx = document.getElementById('frequenciaChart').getContext('2d');
+            if (frequenciaChart) frequenciaChart.destroy();
+
+            frequenciaChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'Frequencia nos jogos gerados', data: dados, backgroundColor: 'rgba(233, 69, 96, 0.7)', borderColor: '#e94560', borderWidth: 1 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: true,
+                    plugins: { legend: { labels: { color: '#eee' } } },
+                    scales: { y: { ticks: { color: '#ccc' }, grid: { color: '#2a4a7a' } }, x: { ticks: { color: '#ccc' }, grid: { color: '#2a4a7a' } } }
+                }
+            });
+        }
+
+        function initTabs() {
+            var tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var tabId = btn.getAttribute('data-tab');
+                    document.querySelectorAll('.tab-content').forEach(function(tab) { tab.classList.remove('active'); });
+                    document.getElementById('tab-' + tabId).classList.add('active');
+                    tabs.forEach(function(b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    if (tabId === 'graficos') atualizarGraficos();
+                    if (tabId === 'historico') atualizarHistoricoTable();
+                });
+            });
+        }
+
+        document.getElementById('pesoFrequencia').addEventListener('input', atualizarLabelsPesos);
+        document.getElementById('pesoAtraso').addEventListener('input', atualizarLabelsPesos);
+        document.getElementById('pesoCiclo').addEventListener('input', atualizarLabelsPesos);
+
+        initTabs();
+        carregarPesos();
+        atualizarHistoricoTable();
+
+        if (carregarHistorico().length === 0) {
+            var exemplo = [1,2,4,5,10,11,12,14,15,17,21,22,23,24,25];
+            salvarJogo(exemplo, analisarJogo(exemplo));
+        }
+    </script>
+</body>
+</html>
