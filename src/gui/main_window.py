@@ -7,6 +7,9 @@ from src.core.auditor import Auditor
 from src.data.loader import CarregadorDados
 from src.gui.weight_panel import WeightPanel
 from src.gui.results_view import ResultsView
+from src.gui.charts_view import ChartsView
+from src.database.migrations import rodar_migracoes
+from src.database.models import ConcursoDB, JogoDB, AuditoriaDB
 
 
 ctk.set_appearance_mode("dark")
@@ -21,6 +24,11 @@ class MainWindow(ctk.CTk):
         self.geometry("1100x750")
         self.minsize(900, 600)
 
+        rodar_migracoes()
+
+        self.concurso_db = ConcursoDB()
+        self.jogo_db = JogoDB()
+        self.auditoria_db = AuditoriaDB()
         self.generator = Gerador9_6()
         self.analyzer = Analisador()
         self.auditor = Auditor()
@@ -57,11 +65,13 @@ class MainWindow(ctk.CTk):
         self.tab_geracao = self.tabview.add("Geracao")
         self.tab_pesos = self.tabview.add("Pesos")
         self.tab_auditoria = self.tabview.add("Auditoria")
+        self.tab_graficos = self.tabview.add("Graficos")
 
         self._build_entrada_tab()
         self._build_geracao_tab()
         self._build_pesos_tab()
         self._build_auditoria_tab()
+        self._build_graficos_tab()
 
         self.status_bar = ctk.CTkLabel(self, text="Pronto", anchor="w", height=24)
         self.status_bar.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 5))
@@ -81,11 +91,12 @@ class MainWindow(ctk.CTk):
 
         frame_import = ctk.CTkFrame(self.tab_entrada)
         frame_import.grid(row=1, column=0, pady=5, padx=20, sticky="ew")
-        frame_import.grid_columnconfigure(2, weight=1)
+        frame_import.grid_columnconfigure(3, weight=1)
 
         ctk.CTkButton(frame_import, text="Carregar CSV", command=self._carregar_csv).grid(row=0, column=0, padx=5, pady=10)
         ctk.CTkButton(frame_import, text="Carregar Excel", command=self._carregar_excel).grid(row=0, column=1, padx=5, pady=10)
         ctk.CTkButton(frame_import, text="Gerar Exemplo (100 concursos)", command=self._gerar_exemplo).grid(row=0, column=2, padx=5, pady=10)
+        ctk.CTkButton(frame_import, text="Salvar no Banco", command=self._salvar_concursos_db).grid(row=0, column=3, padx=5, pady=10)
 
         frame_manual = ctk.CTkFrame(self.tab_entrada)
         frame_manual.grid(row=2, column=0, pady=5, padx=20, sticky="ew")
@@ -161,8 +172,26 @@ class MainWindow(ctk.CTk):
         self.entry_oficial.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
         ctk.CTkButton(frame_audit, text="Auditar", command=self._auditar, width=80).grid(row=0, column=2, padx=10, pady=10)
 
-        self.info_auditoria = ctk.CTkTextbox(self.tab_auditoria, height=300, state="disabled", wrap="word")
-        self.info_auditoria.grid(row=3, column=0, pady=10, padx=20, sticky="nsew")
+        self.info_auditoria = ctk.CTkTextbox(self.tab_auditoria, height=200, state="disabled", wrap="word")
+        self.info_auditoria.grid(row=2, column=0, pady=5, padx=20, sticky="ew")
+
+        frame_hist = ctk.CTkFrame(self.tab_auditoria)
+        frame_hist.grid(row=3, column=0, pady=5, padx=20, sticky="nsew")
+        frame_hist.grid_columnconfigure(0, weight=1)
+        frame_hist.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(frame_hist, text="Historico de Auditoria",
+                      font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, pady=5, sticky="w")
+
+        self.hist_auditoria = ctk.CTkTextbox(frame_hist, height=150, state="disabled", wrap="word")
+        self.hist_auditoria.grid(row=1, column=0, pady=5, sticky="nsew")
+
+    def _build_graficos_tab(self):
+        self.tab_graficos.grid_columnconfigure(0, weight=1)
+        self.tab_graficos.grid_rowconfigure(0, weight=1)
+
+        self.charts_view = ChartsView(self.tab_graficos, self.analyzer)
+        self.charts_view.frame.grid(row=0, column=0, sticky="nsew")
 
     def _log(self, widget, texto):
         widget.configure(state="normal")
@@ -211,11 +240,30 @@ class MainWindow(ctk.CTk):
         self.df_historico = self.loader.gerar_resultados_exemplo()
         self.analyzer.carregar_historico(self.df_historico)
         self.ultimo_concurso = self.loader.extrair_ultimo_concurso(self.df_historico)
-        self._log(self.info_entrada, f"Dados de exemplo gerados: 100 concursos")
+        self._log(self.info_entrada, "Dados de exemplo gerados: 100 concursos")
         if self.ultimo_concurso:
             self._log(self.info_entrada, f"Ultimo concurso: {self.ultimo_concurso}")
             self._exibir_estatisticas()
         self._set_status("Exemplo carregado: 100 concursos")
+
+    def _salvar_concursos_db(self):
+        if self.df_historico is None or self.df_historico.empty:
+            messagebox.showwarning("Aviso", "Carregue dados primeiro")
+            return
+        colunas_bola = sorted([c for c in self.df_historico.columns if "bola" in c.lower()])[:15]
+        if len(colunas_bola) < 15:
+            messagebox.showerror("Erro", "Colunas das bolas nao encontradas")
+            return
+        importados = 0
+        for _, row in self.df_historico.iterrows():
+            nums = sorted([int(row[c]) for c in colunas_bola])
+            concurso_num = int(row.get("Concurso", importados + 1))
+            data = str(row.get("Data", ""))
+            self.concurso_db.inserir(concurso_num, data, nums)
+            importados += 1
+        total = self.concurso_db.contar()
+        self._log(self.info_entrada, f"Salvo no banco: {total} concursos")
+        self._set_status(f"Banco: {total} concursos")
 
     def _exibir_estatisticas(self):
         resumo = self.analyzer.resumo_historico()
@@ -234,7 +282,7 @@ class MainWindow(ctk.CTk):
                 return
             self.ultimo_concurso = nums
             self._log(self.info_entrada, f"Ultimo concurso (manual): {nums}")
-            self._set_status(f"Ultimo concurso definido manualmente")
+            self._set_status("Ultimo concurso definido manualmente")
         except ValueError:
             messagebox.showerror("Erro", "Entrada invalida")
 
@@ -253,8 +301,19 @@ class MainWindow(ctk.CTk):
 
         self.jogos_gerados = self.generator.gerar_multiplos(self.ultimo_concurso, quantidade=qtd, forcado=forcado)
 
+        ultimo_db = self.concurso_db.ultimo()
+        concurso_base_id = ultimo_db["id"] if ultimo_db else None
+
+        for r in self.jogos_gerados:
+            if "erro" not in r:
+                self.jogo_db.inserir(
+                    r["jogo"], r["repete_do_ultimo"], r["novos"],
+                    r["analise"], self.generator.pesos,
+                    concurso_base_id=concurso_base_id,
+                )
+
         self.results_view.exibir(self.jogos_gerados)
-        self._set_status(f"{qtd} jogos gerados com algoritmo 9/6")
+        self._set_status(f"{qtd} jogos gerados e salvos no banco")
 
     def _on_pesos_change(self, pesos):
         self.generator.pesos = pesos
@@ -286,5 +345,33 @@ class MainWindow(ctk.CTk):
         self.info_auditoria.insert("end", f"Aproveitamento: {resultado['aproveitamento']}%\n\n")
         for r in resultado["resultados"]:
             self.info_auditoria.insert("end", f"Jogo: {r['jogo']} -> {r['quantidade']} acertos ({r['classificacao']})\n")
+
+        ultimo_db = self.concurso_db.ultimo()
+        concurso_id = ultimo_db["id"] if ultimo_db else None
+        jogos_db = self.jogo_db.listar_ultimos(len(jogos))
+        for i, r in enumerate(resultado["resultados"]):
+            jogo_id = jogos_db[i]["id"] if i < len(jogos_db) else None
+            if jogo_id:
+                self.auditoria_db.inserir(jogo_id, oficial, r["quantidade"], r["classificacao"], r["premiado"], concurso_id)
+
         self.info_auditoria.configure(state="disabled")
+        self._exibir_historico_auditoria()
         self._set_status(f"Auditoria: {resultado['total_premiados']}/{resultado['total_jogos']} premiados")
+
+    def _exibir_historico_auditoria(self):
+        stats = self.auditoria_db.estatisticas()
+        self.hist_auditoria.configure(state="normal")
+        self.hist_auditoria.delete("1.0", "end")
+        self.hist_auditoria.insert("end", f"Total auditorias: {stats['total']}\n")
+        self.hist_auditoria.insert("end", f"Total premiados: {stats['total_premiados']}\n")
+        self.hist_auditoria.insert("end", f"Media de acertos: {stats['media_acertos']}\n")
+        self.hist_auditoria.insert("end", f"Maximo acertos: {stats['max_acertos']}\n\n")
+
+        ultimas = self.auditoria_db.ultimas_auditorias(10)
+        if ultimas:
+            self.hist_auditoria.insert("end", "Ultimas auditorias:\n")
+            for a in ultimas:
+                self.hist_auditoria.insert("end",
+                    f"  {a['acertos']} acertos ({a['classificacao']}) - "
+                    f"{'Premiado' if a['premiado'] else 'Nao premiado'}\n")
+        self.hist_auditoria.configure(state="disabled")
