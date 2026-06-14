@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="LotoEngine">
+    <link rel="manifest" href="manifest.json">
+    <title>LotoEngine PWA - Analise Lotofacil</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee; padding: 16px; min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; font-size: 1.8em; background: linear-gradient(90deg, #00d4ff, #7b2cbf); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 20px; font-size: 14px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        .tab-btn { background: #0f3460; border: none; color: #eee; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: all 0.3s; font-size: 13px; }
+        .tab-btn.active { background: #e94560; }
+        .tab-btn:hover { background: #1a4a7a; }
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .card { background: rgba(15, 52, 96, 0.8); backdrop-filter: blur(10px); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+        .card h3 { margin-bottom: 12px; color: #00d4ff; font-size: 1.2em; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #ccc; font-size: 13px; }
+        input, select { width: 100%; padding: 10px; background: #0a1a2e; border: 1px solid #2a4a7a; border-radius: 8px; color: #eee; font-size: 14px; }
+        button { background: #e94560; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; }
+        button:hover { background: #ff6b8a; }
+        .numbers-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 15px; }
+        .number-card { background: linear-gradient(135deg, #e94560, #7b2cbf); padding: 10px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px; }
+        .stat-card { background: #0a1a2e; padding: 10px; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 22px; font-weight: bold; color: #00d4ff; }
+        .stat-label { font-size: 11px; color: #888; }
+        .slider { width: 100%; margin: 10px 0; }
+        .canvas-container { max-width: 100%; margin: 0 auto; }
+        canvas { width: 100% !important; height: auto !important; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #2a4a7a; }
+        th { color: #00d4ff; }
+        @media (max-width: 600px) {
+            .numbers-grid { grid-template-columns: repeat(5, 1fr); }
+            .tab-btn { padding: 6px 12px; font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LotoEngine PWA</h1>
+        <div class="subtitle">Algoritmo 9/6 para Lotofacil</div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="gerar">Gerar</button>
+            <button class="tab-btn" data-tab="pesos">Pesos</button>
+            <button class="tab-btn" data-tab="auditoria">Auditar</button>
+            <button class="tab-btn" data-tab="graficos">Graficos</button>
+            <button class="tab-btn" data-tab="historico">Historico</button>
+        </div>
+
+        <div class="tab-content active" id="tab-gerar">
+            <div class="card">
+                <h3>Ultimo Concurso</h3>
+                <div class="input-group">
+                    <label>15 numeros (separados por virgula):</label>
+                    <input type="text" id="ultimoConcurso" placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15" value="1,2,4,5,10,11,12,14,15,17,21,22,23,24,25">
+                </div>
+                <button onclick="gerarJogo()">Gerar Jogo</button>
+                <div id="jogoGerado" style="margin-top: 15px;"></div>
+                <div id="analiseJogo" class="stats"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-pesos">
+            <div class="card">
+                <h3>Pesos dos Filtros</h3>
+                <div class="input-group">
+                    <label>Frequencia: <span id="pesoFreqLabel">1.0</span></label>
+                    <input type="range" id="pesoFrequencia" min="0" max="2" step="0.1" value="1.0">
+                </div>
+                <div class="input-group">
+                    <label>Atraso: <span id="pesoAtrasoLabel">1.0</span></label>
+                    <input type="range" id="pesoAtraso" min="0" max="2" step="0.1" value="1.0">
+                </div>
+                <div class="input-group">
+                    <label>Ciclo: <span id="pesoCicloLabel">1.0</span></label>
+                    <input type="range" id="pesoCiclo" min="0" max="2" step="0.1" value="1.0">
+                </div>
+                <button onclick="salvarPesos()">Salvar</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-auditoria">
+            <div class="card">
+                <h3>Auditoria</h3>
+                <div class="input-group">
+                    <label>Resultado oficial (15 numeros):</label>
+                    <input type="text" id="resultadoOficial" placeholder="Ex: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15">
+                </div>
+                <div class="input-group">
+                    <label>Jogo do historico:</label>
+                    <select id="jogoHistoricoSelect"></select>
+                </div>
+                <button onclick="auditarJogo()">Auditar</button>
+                <div id="resultadoAuditoria" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-graficos">
+            <div class="card">
+                <h3>Frequencia</h3>
+                <div class="canvas-container">
+                    <canvas id="frequenciaChart"></canvas>
+                </div>
+                <button onclick="atualizarGraficos()">Atualizar</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-historico">
+            <div class="card">
+                <h3>Historico</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead><tr><th>ID</th><th>Jogo</th><th>Soma</th><th>P/I</th></tr></thead>
+                        <tbody id="historicoBody"></tbody>
+                    </table>
+                </div>
+                <button onclick="limparHistorico()">Limpar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var PRIMOS = [2,3,5,7,11,13,17,19,23];
+        function isPrimo(n) { return PRIMOS.indexOf(n) >= 0; }
+
+        function validarNumeros(numeros) {
+            if (numeros.length !== 15) return false;
+            var unique = {};
+            for (var i = 0; i < numeros.length; i++) {
+                if (unique[numeros[i]]) return false;
+                unique[numeros[i]] = true;
+            }
+            for (var i = 0; i < numeros.length; i++) {
+                if (numeros[i] < 1 || numeros[i] > 25) return false;
+            }
+            return true;
+        }
+
+        function analisarJogo(numeros) {
+            var soma = 0, pares = 0, primos = 0;
+            for (var i = 0; i < numeros.length; i++) {
+                soma += numeros[i];
+                if (numeros[i] % 2 === 0) pares++;
+                if (isPrimo(numeros[i])) primos++;
+            }
+            return { soma: soma, pares: pares, impares: 15 - pares, primos: primos };
+        }
+
+        function gerarJogo() {
+            var input = document.getElementById('ultimoConcurso').value;
+            var partes = input.split(',');
+            var numeros = [];
+            for (var i = 0; i < partes.length; i++) {
+                var n = parseInt(partes[i].trim());
+                if (!isNaN(n)) numeros.push(n);
+            }
+            if (!validarNumeros(numeros)) { alert("Digite 15 numeros unicos entre 1 e 25!"); return; }
+
+            var manter = [];
+            for (var i = 0; i < 9; i++) manter.push(numeros[i]);
+            var manterSet = {};
+            for (var i = 0; i < manter.length; i++) manterSet[manter[i]] = true;
+
+            var candidatos = [];
+            for (var i = 1; i <= 25; i++) {
+                if (!manterSet[i]) candidatos.push(i);
+            }
+            for (var i = candidatos.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1));
+                var temp = candidatos[i]; candidatos[i] = candidatos[j]; candidatos[j] = temp;
+            }
+            var novos = candidatos.slice(0, 6);
+            var jogo = manter.concat(novos);
+            jogo.sort(function(a,b) { return a - b; });
+
+            var analise = analisarJogo(jogo);
+            var tentativas = 0;
+            while ((analise.soma < 180 || analise.soma > 220 || analise.primos < 5 || analise.primos > 6) && tentativas < 50) {
+                var idx = Math.floor(Math.random() * 15);
+                var alt = candidatos[6 + (tentativas % 15)];
+                if (!alt) break;
+                jogo[idx] = alt;
+                jogo.sort(function(a,b) { return a - b; });
+                analise = analisarJogo(jogo);
+                tentativas++;
+            }
+
+            var container = document.getElementById('jogoGerado');
+            var html = '<h3>Jogo Gerado:</h3><div class="numbers-grid">';
+            for (var i = 0; i < jogo.length; i++) {
+                var num = jogo[i] < 10 ? '0' + jogo[i] : '' + jogo[i];
+                html += '<div class="number-card">' + num + '</div>';
+            }
+            html += '</div>';
+            container.innerHTML = html;
+
+            document.getElementById('analiseJogo').innerHTML =
+                '<div class="stat-card"><div class="stat-value">' + analise.soma + '</div><div class="stat-label">Soma</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + analise.pares + '/' + analise.impares + '</div><div class="stat-label">P/I</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + analise.primos + '</div><div class="stat-label">Primos</div></div>';
+
+            salvarJogo(jogo, analise);
+        }
+
+        function salvarJogo(jogo, analise) {
+            var h = JSON.parse(localStorage.getItem('lotoengine_historico') || '[]');
+            h.unshift({ id: Date.now(), data: new Date().toLocaleString(), numeros: jogo, soma: analise.soma, pares: analise.pares, impares: analise.impares, primos: analise.primos });
+            localStorage.setItem('lotoengine_historico', JSON.stringify(h.slice(0, 50)));
+            atualizarHistorico();
+        }
+
+        function carregarHistorico() { return JSON.parse(localStorage.getItem('lotoengine_historico') || '[]'); }
+
+        function atualizarHistorico() {
+            var h = carregarHistorico();
+            var body = document.getElementById('historicoBody');
+            if (body) {
+                body.innerHTML = '';
+                for (var i = 0; i < h.length; i++) {
+                    var j = h[i];
+                    var jogoStr = j.numeros.slice(0, 5).join(',') + '...';
+                    body.innerHTML += '<tr><td>' + j.id + '</td><td>' + jogoStr + '</td><td>' + j.soma + '</td><td>' + j.pares + '/' + j.impares + '</td></tr>';
+                }
+            }
+            var select = document.getElementById('jogoHistoricoSelect');
+            if (select) {
+                select.innerHTML = '<option value="">-- Selecionar --</option>';
+                for (var i = 0; i < h.length; i++) {
+                    var j = h[i];
+                    select.innerHTML += '<option value="' + j.id + '">' + j.data + ' - ' + j.numeros.slice(0, 4).join(',') + '...</option>';
+                }
+            }
+        }
+
+        function auditarJogo() {
+            var resultadoInput = document.getElementById('resultadoOficial').value;
+            var partes = resultadoInput.split(',');
+            var resultado = [];
+            for (var i = 0; i < partes.length; i++) {
+                var n = parseInt(partes[i].trim());
+                if (!isNaN(n)) resultado.push(n);
+            }
+            if (resultado.length !== 15) { alert("Digite 15 numeros!"); return; }
+
+            var select = document.getElementById('jogoHistoricoSelect');
+            if (!select.value) { alert("Selecione um jogo do historico!"); return; }
+
+            var jogoId = parseInt(select.value);
+            var h = carregarHistorico();
+            var jogo = null;
+            for (var i = 0; i < h.length; i++) {
+                if (h[i].id === jogoId) { jogo = h[i]; break; }
+            }
+            if (!jogo) { alert("Jogo nao encontrado!"); return; }
+
+            var acertos = 0;
+            for (var i = 0; i < jogo.numeros.length; i++) {
+                if (resultado.indexOf(jogo.numeros[i]) >= 0) acertos++;
+            }
+
+            document.getElementById('resultadoAuditoria').innerHTML =
+                '<div class="stat-card" style="background: linear-gradient(135deg, #e94560, #7b2cbf);">' +
+                '<div class="stat-value">' + acertos + ' ACERTOS</div></div>';
+        }
+
+        function limparHistorico() {
+            if (confirm('Limpar todo o historico?')) {
+                localStorage.removeItem('lotoengine_historico');
+                atualizarHistorico();
+            }
+        }
+
+        function salvarPesos() {
+            var pesos = {
+                freq: document.getElementById('pesoFrequencia').value,
+                atraso: document.getElementById('pesoAtraso').value,
+                ciclo: document.getElementById('pesoCiclo').value
+            };
+            localStorage.setItem('lotoengine_pesos', JSON.stringify(pesos));
+            alert("Pesos salvos!");
+        }
+
+        function carregarPesos() {
+            var saved = localStorage.getItem('lotoengine_pesos');
+            if (saved) {
+                var pesos = JSON.parse(saved);
+                document.getElementById('pesoFrequencia').value = pesos.freq;
+                document.getElementById('pesoAtraso').value = pesos.atraso;
+                document.getElementById('pesoCiclo').value = pesos.ciclo;
+                document.getElementById('pesoFreqLabel').textContent = pesos.freq;
+                document.getElementById('pesoAtrasoLabel').textContent = pesos.atraso;
+                document.getElementById('pesoCicloLabel').textContent = pesos.ciclo;
+            }
+        }
+
+        var frequenciaChart = null;
+
+        function atualizarGraficos() {
+            var h = carregarHistorico();
+            var freq = {};
+            for (var i = 1; i <= 25; i++) freq[i] = 0;
+            for (var i = 0; i < h.length; i++) {
+                for (var j = 0; j < h[i].numeros.length; j++) {
+                    freq[h[i].numeros[j]]++;
+                }
+            }
+            var labels = [];
+            for (var i = 1; i <= 25; i++) labels.push('' + i);
+            var dados = [];
+            for (var i = 1; i <= 25; i++) dados.push(freq[i]);
+
+            var ctx = document.getElementById('frequenciaChart').getContext('2d');
+            if (frequenciaChart) frequenciaChart.destroy();
+            frequenciaChart = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: 'Frequencia', data: dados, backgroundColor: 'rgba(233, 69, 96, 0.7)', borderColor: '#e94560', borderWidth: 1 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: true,
+                    plugins: { legend: { labels: { color: '#eee' } } },
+                    scales: { y: { ticks: { color: '#ccc' }, grid: { color: '#2a4a7a' } }, x: { ticks: { color: '#ccc' }, grid: { color: '#2a4a7a' } } }
+                }
+            });
+        }
+
+        function initTabs() {
+            var tabs = document.querySelectorAll('.tab-btn');
+            for (var i = 0; i < tabs.length; i++) {
+                (function(btn) {
+                    btn.onclick = function() {
+                        var tabId = btn.getAttribute('data-tab');
+                        var contents = document.querySelectorAll('.tab-content');
+                        for (var j = 0; j < contents.length; j++) contents[j].classList.remove('active');
+                        document.getElementById('tab-' + tabId).classList.add('active');
+                        for (var j = 0; j < tabs.length; j++) tabs[j].classList.remove('active');
+                        btn.classList.add('active');
+                        if (tabId === 'graficos') atualizarGraficos();
+                        if (tabId === 'historico') atualizarHistorico();
+                    };
+                })(tabs[i]);
+            }
+        }
+
+        document.getElementById('pesoFrequencia').oninput = function() { document.getElementById('pesoFreqLabel').textContent = this.value; };
+        document.getElementById('pesoAtraso').oninput = function() { document.getElementById('pesoAtrasoLabel').textContent = this.value; };
+        document.getElementById('pesoCiclo').oninput = function() { document.getElementById('pesoCicloLabel').textContent = this.value; };
+
+        initTabs();
+        carregarPesos();
+        atualizarHistorico();
+    </script>
+</body>
+</html>
