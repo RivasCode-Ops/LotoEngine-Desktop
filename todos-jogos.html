@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LotoEngine - Historico de Jogos</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 10px; color: #e94560; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
+        .jogo-card {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid #333;
+        }
+        .jogo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .jogo-id { color: #e94560; font-size: 14px; }
+        .jogo-data { color: #888; font-size: 14px; }
+        .jogo-acertos { font-size: 18px; font-weight: bold; padding: 5px 12px; border-radius: 20px; }
+        .acertos-bom { background: #00ff88; color: #1a1a2e; }
+        .acertos-medio { background: #ffaa00; color: #1a1a2e; }
+        .acertos-ruim { background: #e94560; color: white; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .numero {
+            background: #2a2a4a;
+            padding: 10px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+        }
+        .acertou { background: #00ff88; color: #1a1a2e; box-shadow: 0 0 8px #00ff88; }
+        .errou { background: #e94560; color: white; }
+        .neutro { background: #2a2a4a; color: white; }
+        .resultado-linha {
+            margin-top: 15px;
+            padding: 10px;
+            background: #0a0a1a;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 13px;
+            font-family: monospace;
+        }
+        .legenda {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            flex-wrap: wrap;
+        }
+        .legenda span { display: inline-block; width: 24px; height: 24px; border-radius: 6px; margin-right: 6px; vertical-align: middle; }
+        @media (max-width: 600px) {
+            .grid { max-width: 100%; gap: 5px; }
+            .numero { padding: 8px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>LotoEngine - Historico de Jogos</h1>
+    <div class="subtitle">Todos os jogos gerados com seus acertos</div>
+
+    <div id="listaJogos"></div>
+
+    <div class="legenda">
+        <div><span style="background:#00ff88;"></span> Acertou no concurso</div>
+        <div><span style="background:#e94560;"></span> Errou (nao saiu)</div>
+        <div><span style="background:#2a2a4a;"></span> Nao estava no jogo</div>
+    </div>
+</div>
+
+<script>
+    var jogos = JSON.parse(localStorage.getItem('lotoengine_historico') || '[]');
+    var resultados = JSON.parse(localStorage.getItem('lotoengine_resultados') || '[]');
+
+    function encontrarResultadoParaJogo(dataJogo) {
+        var match = null;
+        for (var i = 0; i < resultados.length; i++) {
+            if (resultados[i].data === dataJogo) return resultados[i];
+            if (!match || resultados[i].numero > match.numero) match = resultados[i];
+        }
+        return match;
+    }
+
+    function getClasseAcerto(numero, jogoNumeros, resultadoNumeros) {
+        if (jogoNumeros.indexOf(numero) === -1) return 'neutro';
+        if (resultadoNumeros && resultadoNumeros.indexOf(numero) !== -1) return 'acertou';
+        return 'errou';
+    }
+
+    function getClasseAcertos(acertos) {
+        if (acertos >= 13) return 'acertos-bom';
+        if (acertos >= 11) return 'acertos-medio';
+        return 'acertos-ruim';
+    }
+
+    function renderizarJogos() {
+        var container = document.getElementById('listaJogos');
+        container.innerHTML = '';
+
+        var ordenados = jogos.slice().sort(function(a, b) {
+            return b.id - a.id;
+        });
+
+        for (var i = 0; i < ordenados.length; i++) {
+            var jogo = ordenados[i];
+            var resultado = encontrarResultadoParaJogo(jogo.data);
+            var acertos = 0;
+            if (resultado) {
+                for (var k = 0; k < jogo.numeros.length; k++) {
+                    if (resultado.numeros.indexOf(jogo.numeros[k]) !== -1) acertos++;
+                }
+            }
+
+            var card = document.createElement('div');
+            card.className = 'jogo-card';
+
+            var acertosHtml = '<div class="jogo-acertos ' + getClasseAcertos(acertos) + '">' + acertos + ' ACERTOS</div>';
+
+            card.innerHTML =
+                '<div class="jogo-header">' +
+                    '<div>' +
+                        '<span class="jogo-id">ID: ' + jogo.id + '</span>' +
+                        '<span class="jogo-data" style="margin-left: 10px;"> ' + jogo.data + '</span>' +
+                    '</div>' +
+                    acertosHtml +
+                '</div>' +
+                '<div class="grid" id="grid-' + jogo.id + '"></div>' +
+                '<div class="resultado-linha">' +
+                    '<strong>Resultado referecia:</strong> ' +
+                    (resultado ? 'Concurso ' + resultado.numero + ' (' + resultado.data + ') - ' +
+                        resultado.numeros.map(function(n) { return (n < 10 ? '0' : '') + n; }).join(', ') : 'Nenhum resultado encontrado') +
+                '</div>';
+
+            container.appendChild(card);
+
+            var grid = document.getElementById('grid-' + jogo.id);
+            for (var n = 1; n <= 25; n++) {
+                var div = document.createElement('div');
+                div.className = 'numero ' + getClasseAcerto(n, jogo.numeros, resultado ? resultado.numeros : null);
+                div.textContent = (n < 10 ? '0' : '') + n;
+                grid.appendChild(div);
+            }
+        }
+
+        if (ordenados.length === 0) {
+            container.innerHTML = '<div class="jogo-card" style="text-align:center;padding:30px;">Nenhum jogo gerado ainda.</div>';
+        }
+    }
+
+    renderizarJogos();
+</script>
+</body>
+</html>
