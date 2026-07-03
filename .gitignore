@@ -8,3 +8,13 @@ build/
 env/
 *.spec
 data/pesos_config.json
+node_modules/
+.next/
+venv/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+.vercel/
